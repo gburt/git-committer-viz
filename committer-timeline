@@ -3,11 +3,12 @@
 use POSIX qw(strftime);
 use strict;
 
-# Run like this from within a git checkout:
+# Add this file to your bin or PATH, then 
+# run like this from within a git checkout:
 #
-# ./committer-timeline -- po/ > translator-timeline.html
-# ./committer-timeline -- src/ > committer-timeline.html
-# ./committer-timeline > timeline.html
+# committer-timeline -- po/ > translator-timeline.html
+# committer-timeline -- src/ > committer-timeline.html
+# committer-timeline > timeline.html
 
 my $time_slot_resolution = 3600*24*7;
 # consider somebody active if they've contributed in last 24 weeks
@@ -106,7 +107,6 @@ foreach my $commit_time (reverse(sort(keys(%first_commit_times)))) {
     my $hits = 0;
     my $author_start;
     my $author_end;
-    #my $author_last_slot = $start;
     for (my $time_slot = $start; $time_slot <= $end; $time_slot++) {
         my $commit = $commits{$author . $time_slot};
         if (defined($commit)) {
@@ -135,7 +135,6 @@ foreach my $commit_time (reverse(sort(keys(%first_commit_times)))) {
 my @tags = `git tag -l`;
 my %tag_times;
 foreach my $tag (@tags) {
-    #next if $tag !~ m/^[\.\d]+$/;
     my $line = `git log -n 1 --pretty=format:"%ct" $tag`;
     $line =~ m/^(\d+)$/;
     my $tag_time = $1;
