@@ -1,0 +1,168 @@
+#!/usr/bin/perl
+
+use POSIX qw(strftime);
+use strict;
+
+# Run like this from within a git checkout:
+#
+# ./committer-timeline -- po/ > translator-timeline.html
+# ./committer-timeline -- src/ > committer-timeline.html
+# ./committer-timeline > timeline.html
+
+my $time_slot_resolution = 3600*24*7;
+# consider somebody active if they've contributed in last 24 weeks
+my $time_slot_active_threshold = (3600*24*7*24) / $time_slot_resolution;
+my $time_slot_name_plural = "weeks";
+
+sub time_slot {
+    my $in = shift;
+    return int($in/$time_slot_resolution);
+}
+
+sub slot_time {
+    my $in = shift;
+    return strftime ("%B %e, %Y", localtime ($in * $time_slot_resolution));
+}
+
+my %commits;
+my %first_commit_times;
+my @time_slots;
+my $start;
+my $end;
+
+my $args = join(' ', @ARGV);
+my $git_log_cmd = 'git log --pretty=format:"%ct ::: %an ::: %h ::: %s" ' . $args . ' | sort';
+
+my @lines = `$git_log_cmd`;
+foreach my $line (@lines) {
+    chomp $line;
+    if ($line =~ m/^(\d+) ::: (.+) ::: (.+) ::: (.+)$/) {
+        my $time = $1;
+        my $author = $2;
+        my $hash = $3;
+        my $subject = $4;
+
+        if ($time < $start) {
+            $start = $time;
+        }
+
+        if ($time > $end) {
+            $end = $time;
+        }
+
+        my $time_slot = time_slot $time;
+
+        if (!defined($commits{$author})) {
+            $commits{$author} = 1;
+            $first_commit_times{$time} = $author;
+        }
+
+        $commits{$author. $time_slot} = { 'hash' => $hash, 'subject' => $subject };
+    } else {
+        print "ERR: not recognized: $line\n";
+    }
+}
+
+$start = time_slot $start;
+$end   = time_slot $end;
+
+print '<html>';
+print '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
+print '<style>';
+print 'td { width: 3px; height: 6px; overflow: hidden; }';
+print '.author { font-size: 3px; width: 100px; }';
+print '.color-1 > .commit { background-color: #888; }';
+print '.color-2 > .commit { background-color: #888; }';
+print '.active > .commit { background-color: black; }';
+print 'td.percentage { width: 150px; padding-left: 15px; }';
+print 'td div { background-color: #999; width: 100%; height:100%;}';
+print 'tr { padding-bottom: 1px; }';
+print 'tr:hover { background-color: #ddd; }';
+print '.tag, .blank-tag { padding-top: 4px; }';
+print 'td.tag { background-color: #aaf; height: 12px; }';
+print '#header { font-family: times; font-size: 16px; padding-bottom: 10px; color: #aaa; }';
+print '</style>';
+print '</head>';
+print '<body>';
+print "<div id=\"header\">$time_slot_name_plural a given author made commits, " .
+        slot_time ($start) . " &ndash; " .  slot_time ($end) . "<br/>commits in gray from authors not active in last $time_slot_active_threshold $time_slot_name_plural";
+if ($args ne '') {
+    print "<br/>git log parameters: $args";
+}
+print '</div>';
+print '<table cellpadding="0" cellspacing="0" border="0">';
+
+my @colors = ( 'color-1', 'color-2' );
+my $color_index = 0;
+
+my $author_index = keys (%first_commit_times);
+foreach my $commit_time (reverse(sort(keys(%first_commit_times)))) {
+    my $author = $first_commit_times{$commit_time};
+    $color_index = ($color_index + 1) % (length(@colors) + 1);
+    my $row_color = @colors[$color_index];
+
+    my $author_html = '';
+
+    my $hits = 0;
+    my $author_start;
+    my $author_end;
+    #my $author_last_slot = $start;
+    for (my $time_slot = $start; $time_slot <= $end; $time_slot++) {
+        my $commit = $commits{$author . $time_slot};
+        if (defined($commit)) {
+            $author_html = $author_html . "<td class=\"commit\"></td>";
+
+            $author_start = $time_slot if !defined($author_start);
+            $author_end = $time_slot;
+            $hits++;
+        } else {
+            $author_html = $author_html . '<td class="no-commit"></td>';
+        }
+    }
+
+    my $is_active = ($end - $author_end) < $time_slot_active_threshold ? 'active' : '';
+    my $tooltip = "$author_index. $author (commits from " . slot_time($author_start) . " &ndash; " . slot_time($author_end) . ')';
+    print "<tr title=\"$tooltip\" class=\"$row_color $is_active\">";
+    print $author_html;
+
+    my $percentage = ($end - $start == 0) ? 100 : int(100 * $hits/($end - $start));
+    my $author_percentage = ($author_end - $author_start == 0) ? 100 : int(100 * $hits/($author_end - $author_start));
+    print "<td class=\"percentage\" title=\"$author made commits in $percentage% of the $time_slot_name_plural ($author_percentage% of the $time_slot_name_plural between which s/he was active)\"><div style=\"width:$percentage%;\"></div></td>";
+    print "</tr>\n";
+    $author_index--;
+}
+
+my @tags = `git tag -l`;
+my %tag_times;
+foreach my $tag (@tags) {
+    #next if $tag !~ m/^[\.\d]+$/;
+    my $line = `git log -n 1 --pretty=format:"%ct" $tag`;
+    $line =~ m/^(\d+)$/;
+    my $tag_time = $1;
+    $tag_times{$tag_time} = $tag;
+}
+
+print '<tr id="tags">';
+my $last_tag_slot = $start;
+foreach my $tag_time (sort(keys(%tag_times))) {
+    my $tag = $tag_times{$tag_time};
+    my $tag_time_slot = time_slot $tag_time;
+    next if ($tag_time_slot < $start || $tag_time_slot > $end);
+    next if $tag_time_slot <= $last_tag_slot;
+
+    my $colspan = $tag_time_slot - $last_tag_slot - 1;
+    my $dest_time = slot_time ($last_tag_slot + $colspan);
+    my $tag_time_str = slot_time($tag_time_slot);
+    if ($colspan > 0) {
+        print "<td class=\"blank-tag\" colspan=\"$colspan\"></td>";
+    }
+
+    #print "<td class=\"tag\" title=\"$tag ($tag_time_str)\">$tag</td>";
+    print "<td class=\"tag\" title=\"$tag ($tag_time_str)\"></td>";
+    $last_tag_slot = $tag_time_slot;
+}
+print "</tr>\n";
+
+print "</table>\n";
+print '</body>';
+print '</html>';
