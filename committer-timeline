@@ -10,12 +10,6 @@ use strict;
 # committer-timeline -- src/ > committer-timeline.html
 # committer-timeline > timeline.html
 
-# TODO - ways this script could be improved
-#
-#  * Reduce the number of table cells (<td>) by using colspan=N for
-#    N non-commts or commits in a row.  Would probably save considerable
-#    file space, and improve rendering performance.
-
 my $time_slot_resolution = 3600*24*7;
 # consider somebody active if they've contributed in last 24 weeks
 my $time_slot_active_threshold = (3600*24*7*24) / $time_slot_resolution;
@@ -109,17 +103,31 @@ foreach my $author (reverse(@ordered_authors)) {
     my $hits = 0;
     my $author_start;
     my $author_end;
+    my $no_commit_range_start = 0;
     for (my $time_slot = $start; $time_slot <= $end; $time_slot++) {
         my $commit = $commits{$author . $time_slot};
         if (defined($commit)) {
+            if ($no_commit_range_start > 0) {
+                my $colspan = $time_slot - $no_commit_range_start;
+                $author_html = $author_html . "<td class=\"no-commit\" colspan=\"$colspan\"></td>";
+                $no_commit_range_start = 0;
+            }
+
             $author_html = $author_html . "<td class=\"commit\"></td>";
 
             $author_start = $time_slot if !defined($author_start);
             $author_end = $time_slot;
             $hits++;
         } else {
-            $author_html = $author_html . '<td class="no-commit"></td>';
+            if ($no_commit_range_start == 0) {
+                $no_commit_range_start = $time_slot;
+            }
         }
+    }
+
+    if ($no_commit_range_start > 0) {
+        my $colspan = $end - $no_commit_range_start + 1;
+        $author_html = $author_html . "<td class=\"no-commit\" colspan=\"$colspan\"></td>";
     }
 
     my $is_active = ($end - $author_end) < $time_slot_active_threshold ? 'active' : '';
