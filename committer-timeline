@@ -28,7 +28,7 @@ sub slot_time {
 my %commits;
 my %first_commit_times;
 my @time_slots;
-my $start;
+my $start = time();
 my $end;
 
 my $args = join(' ', @ARGV);
