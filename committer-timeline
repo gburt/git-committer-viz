@@ -10,6 +10,12 @@ use strict;
 # committer-timeline -- src/ > committer-timeline.html
 # committer-timeline > timeline.html
 
+# TODO - ways this script could be improved
+#
+#  * Reduce the number of table cells (<td>) by using colspan=N for
+#    N non-commts or commits in a row.  Would probably save considerable
+#    file space, and improve rendering performance.
+
 my $time_slot_resolution = 3600*24*7;
 # consider somebody active if they've contributed in last 24 weeks
 my $time_slot_active_threshold = (3600*24*7*24) / $time_slot_resolution;
