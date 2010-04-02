@@ -172,6 +172,16 @@ foreach my $tag_time (sort(keys(%tag_times))) {
 }
 print "</tr>\n";
 
+# Print out a row with all its columns, not collapsed, to ensure
+# any colspan=N cells from above don't collapse down the width of just
+# one cell
+print '<tr>';
+for (my $i = $start; $i <= $end; $i++) {
+    print '<td></td>';
+}
+print '</tr>';
+
+
 print "</table>\n";
 print '</body>';
 print '</html>';
