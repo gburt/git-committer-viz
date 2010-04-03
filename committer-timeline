@@ -78,7 +78,8 @@ foreach my $author (keys(%author_first_commits)) {
     $first_commit_authors{$author_first_commits{$author}} = $author;
 }
 
-foreach my $time (sort(keys(%first_commit_authors))) {
+my @sorted_first_commit_authors = sort {$a <=> $b} keys(%first_commit_authors);
+foreach my $time (@sorted_first_commit_authors) {
     #print "push \@ordered_authors, $time / $first_commit_authors{$time}\n";
     push @ordered_authors, $first_commit_authors{$time};
 }
