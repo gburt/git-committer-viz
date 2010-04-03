@@ -27,38 +27,60 @@ sub slot_time {
 
 my %commits;
 my @ordered_authors;
+my %author_first_commits;
 my @time_slots;
-my $start;
-my $end;
+my $start = 99999999999999999999;
+my $end = 0;
 
 my $args = join(' ', @ARGV);
-my $git_log_cmd = 'git log --date-order --reverse --pretty=format:"%ct ::: %an ::: %h ::: %s" ' . $args;
+my $git_log_cmd = 'git log --pretty=format:"%ct <TUFTE> %an <TUFTE> %h <TUFTE> %s" ' . $args;
 
 my @lines = `$git_log_cmd`;
+
 foreach my $line (@lines) {
     chomp $line;
-    if ($line =~ m/^(\d+) ::: (.+) ::: (.+) ::: (.+)$/) {
+    if ($line =~ m/^(\d+) <TUFTE> (.*) <TUFTE> (.+) <TUFTE> (.*)$/) {
         my $time = int($1);
         my $author = $2;
         my $hash = $3;
         my $subject = $4;
 
-        if (!defined ($start)) {
+        next if $author eq '';
+        next if $time < 1000; # sanity check, got one $time = 1 on linux-2.6 repo
+
+        if ($time < $start) {
             $start = $time;
+        }
+
+        if ($time > $end) {
+            $end = $time;
         }
 
         my $time_slot = time_slot $time;
 
         if (!defined($commits{$author})) {
             $commits{$author} = 1;
-            push @ordered_authors, $author;
+            $author_first_commits{$author} = $time;
+        }
+
+        if ($time < $author_first_commits{$author}) {
+            $author_first_commits{$author} = $time;
         }
 
         $commits{$author. $time_slot} = { 'hash' => $hash, 'subject' => $subject };
-        $end = $time;
     } else {
-        print "ERR: not recognized: $line\n";
+        warn "ERR: not recognized: $line\n";
     }
+}
+
+my %first_commit_authors;
+foreach my $author (keys(%author_first_commits)) {
+    $first_commit_authors{$author_first_commits{$author}} = $author;
+}
+
+foreach my $time (sort(keys(%first_commit_authors))) {
+    #print "push \@ordered_authors, $time / $first_commit_authors{$time}\n";
+    push @ordered_authors, $first_commit_authors{$time};
 }
 
 $start = time_slot $start;
