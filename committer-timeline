@@ -31,11 +31,24 @@ my %author_first_commits;
 my @time_slots;
 my $start = 99999999999999999999;
 my $end = 0;
+my @lines;
 
 my $args = join(' ', @ARGV);
-my $git_log_cmd = 'git log --pretty=format:"%ct <TUFTE> %an <TUFTE> %h <TUFTE> %s" ' . $args;
 
-my @lines = `$git_log_cmd`;
+if (-d ".git") {
+    my $git_log_cmd = 'git log --pretty=format:"%ct <TUFTE> %an <TUFTE> %h <TUFTE> %s" ' . $args;
+    @lines = `$git_log_cmd`;
+} else {
+    if (-f $args) {
+        open (IN, $args);
+        while (my $line = readline(IN)) {
+            push @lines, $line;
+        }
+        close (IN);
+    } else {
+        die "not run from a git repo checkout or passed a data filename";
+    }
+}
 
 foreach my $line (@lines) {
     chomp $line;
@@ -165,35 +178,37 @@ foreach my $author (reverse(@ordered_authors)) {
     $author_index--;
 }
 
-my @tags = `git tag -l`;
-my %tag_times;
-foreach my $tag (@tags) {
-    my $line = `git log -n 1 --pretty=format:"%ct" $tag`;
-    $line =~ m/^(\d+)$/;
-    my $tag_time = $1;
-    $tag_times{$tag_time} = $tag;
-}
-
-print '<tr id="tags">';
-my $last_tag_slot = $start;
-foreach my $tag_time (sort(keys(%tag_times))) {
-    my $tag = $tag_times{$tag_time};
-    my $tag_time_slot = time_slot $tag_time;
-    next if ($tag_time_slot < $start || $tag_time_slot > $end);
-    next if $tag_time_slot <= $last_tag_slot;
-
-    my $colspan = $tag_time_slot - $last_tag_slot - 1;
-    my $dest_time = slot_time ($last_tag_slot + $colspan);
-    my $tag_time_str = slot_time($tag_time_slot);
-    if ($colspan > 0) {
-        print "<td class=\"blank-tag\" colspan=\"$colspan\"></td>";
+if (-d ".git") {
+    my @tags = `git tag -l`;
+    my %tag_times;
+    foreach my $tag (@tags) {
+        my $line = `git log -n 1 --pretty=format:"%ct" $tag`;
+        $line =~ m/^(\d+)$/;
+        my $tag_time = $1;
+        $tag_times{$tag_time} = $tag;
     }
 
-    #print "<td class=\"tag\" title=\"$tag ($tag_time_str)\">$tag</td>";
-    print "<td class=\"tag\" title=\"$tag ($tag_time_str)\"></td>";
-    $last_tag_slot = $tag_time_slot;
+    print '<tr id="tags">';
+    my $last_tag_slot = $start;
+    foreach my $tag_time (sort(keys(%tag_times))) {
+        my $tag = $tag_times{$tag_time};
+        my $tag_time_slot = time_slot $tag_time;
+        next if ($tag_time_slot < $start || $tag_time_slot > $end);
+        next if $tag_time_slot <= $last_tag_slot;
+
+        my $colspan = $tag_time_slot - $last_tag_slot - 1;
+        my $dest_time = slot_time ($last_tag_slot + $colspan);
+        my $tag_time_str = slot_time($tag_time_slot);
+        if ($colspan > 0) {
+            print "<td class=\"blank-tag\" colspan=\"$colspan\"></td>";
+        }
+
+        #print "<td class=\"tag\" title=\"$tag ($tag_time_str)\">$tag</td>";
+        print "<td class=\"tag\" title=\"$tag ($tag_time_str)\"></td>";
+        $last_tag_slot = $tag_time_slot;
+    }
+    print "</tr>\n";
 }
-print "</tr>\n";
 
 # Print out a row with all its columns, not collapsed, to ensure
 # any colspan=N cells from above don't collapse down the width of just
